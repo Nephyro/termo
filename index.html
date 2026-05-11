@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hype Term - Student</title>
+    <title>Hyper Term - Student</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -47,6 +47,12 @@
             overflow-y: auto;
             padding: 24px;
             gap: 32px;
+            scroll-behavior: smooth;
+        }
+
+        /* Espaçamento extra no fundo para o teclado não cobrir a última linha */
+        .board-container-padding {
+            padding-bottom: 180px;
         }
 
         @media (max-width: 768px) {
@@ -87,7 +93,6 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
-        // Base de dados expandida com foco em palavras comuns do Português Brasileiro
         const WORDS_BY_LENGTH = {
             4: ["amor", "casa", "dado", "fogo", "gato", "item", "jogo", "lago", "maos", "nulo", "povo", "roda", "sede", "tela", "vida", "bola", "azul", "mato", "reus", "fase", "hino", "leão", "meio", "novo", "olho", "pulo", "real", "suco", "trio", "vaga", "zero", "alvo", "boca", "cano", "doce", "eixo", "fiel", "guri", "hoje", "ilha", "joia", "lama", "musa", "neta", "ouro", "puro", "raso", "sumo", "teto", "urso", "voar"],
             5: ["sagaz", "amago", "negro", "exito", "termo", "nobre", "algoz", "senso", "afeto", "etica", "plena", "mutua", "tenue", "fazer", "assim", "sutil", "vigor", "furia", "poder", "audaz", "ideia", "cerne", "moral", "inato", "sobre", "desde", "muito", "justo", "quiça", "torpe", "anexo", "futil", "razão", "icone", "etnia", "haver", "egide", "tange", "lapso", "casal", "expor", "haver", "dizer", "gleba", "ardil", "brado", "vicio", "serio", "temor", "saber", "obice", "pausa", "senão", "comum", "culto", "temer", "mundo", "censo", "denso", "pauta", "fugaz", "valer", "coisa", "viva", "pleno", "ordem", "gesto", "fatos", "limbo", "crise", "prole", "fluxo", "ajuda", "vazio", "pobre", "legal", "manha", "atras", "bravo", "casta"],
@@ -100,7 +105,7 @@
             CLASSIC: { id: 'classic', label: 'Clássico', boards: 1, attempts: 6, len: 5 },
             DUET: { id: 'duet', label: 'Dueto', boards: 2, attempts: 7, len: 5 },
             QUARTET: { id: 'quartet', label: 'Quarteto', boards: 4, attempts: 9, len: 5 },
-            INFINITE: { id: 'infinite', label: 'Infinito', boards: 1, attempts: 9999, len: null }
+            INFINITE: { id: 'infinite', label: 'Infinito', boards: 1, attempts: 999, len: null }
         };
 
         const normalizeStr = (str) => str?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || "";
@@ -118,6 +123,9 @@
             const [shake, setShake] = useState(false);
             const [showModal, setShowModal] = useState(false);
             
+            const activeLineRef = useRef(null);
+            const scrollContainerRef = useRef(null);
+
             const [stats, setStats] = useState(() => {
                 const saved = localStorage.getItem('termopro_stats_v3');
                 return saved ? JSON.parse(saved) : {
@@ -129,6 +137,23 @@
             useEffect(() => {
                 document.body.className = isDark ? 'theme-dark' : 'theme-light';
             }, [isDark]);
+
+            // Função para gerenciar o scroll automático
+            const scrollToActiveLine = useCallback(() => {
+                if (activeLineRef.current && scrollContainerRef.current) {
+                    activeLineRef.current.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }
+            }, []);
+
+            // Scrollar sempre que mudar o palpite ou enviar
+            useEffect(() => {
+                if (mode.id === 'infinite') {
+                    scrollToActiveLine();
+                }
+            }, [guesses.length, currentGuess, mode.id, scrollToActiveLine]);
 
             const saveStats = (won, attempts) => {
                 const newStats = { ...stats };
@@ -182,6 +207,8 @@
                 }
                 
                 const finalGuess = cleanGuess.trim();
+                if (!finalGuess) return;
+
                 const newGuesses = [...guesses, finalGuess];
                 setGuesses(newGuesses);
                 setCurrentGuess("");
@@ -340,7 +367,7 @@
                 };
 
                 return (
-                    <div className={`flex flex-col gap-2 items-center transition-all duration-500 ${solved ? 'opacity-20 grayscale scale-95' : 'scale-100'}`}>
+                    <div className={`flex flex-col gap-2 items-center transition-all duration-500 board-container-padding ${solved ? 'opacity-20 grayscale scale-95' : 'scale-100'}`}>
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-colors ${solved ? 'bg-green-500/20 text-green-500 border-green-500/20' : 'bg-gray-500/10 text-gray-500 border-transparent'}`}>
                             PALAVRA #{boardIndex + 1} {solved && " ✓"}
                         </span>
@@ -354,7 +381,11 @@
                                 const wasSolvedBefore = guesses.slice(0, i).some(g => normalizeStr(g) === normalizeStr(target));
                                 if (wasSolvedBefore && !isInfinite) return null;
                                 return (
-                                    <div key={i} className={`flex gap-1.5 justify-center ${isCurrentRow && shake ? 'animate-shake' : ''}`}>
+                                    <div 
+                                        key={i} 
+                                        ref={isCurrentRow ? activeLineRef : null}
+                                        className={`flex gap-1.5 justify-center ${isCurrentRow && shake ? 'animate-shake' : ''}`}
+                                    >
                                         {Array.from({ length: displayLen }).map((_, j) => (
                                             <Tile key={j} index={j} letter={wordToDisplay[j] || " "} guess={guess} target={target} isCurrent={isCurrentRow} isCursor={isCurrentRow && cursorIndex === j} sizeClass={sizeClass} />
                                         ))}
@@ -434,7 +465,7 @@
                     {view === 'home' ? (
                         <div className="flex-1 flex flex-col items-center justify-center p-8 w-full max-w-sm animate-slide-up">
                             <div className="mb-12 text-center">
-                                <h1 className="text-6xl font-black italic tracking-tighter leading-none uppercase">Hype<span className="text-green-500">Term</span></h1>
+                                <h1 className="text-6xl font-black italic tracking-tighter leading-none uppercase">HYPER<span className="text-green-500">TERM</span></h1>
                                 <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.5em] mt-3">Open source game alternative</p>
                             </div>
                             <div className="grid gap-3 w-full">
@@ -471,12 +502,12 @@
                             </header>
                             
                             <main className="flex-1 w-full relative overflow-hidden flex flex-col">
-                                <div className="boards-layout no-scrollbar">
+                                <div ref={scrollContainerRef} className="boards-layout no-scrollbar">
                                     {targets.map((t, idx) => (<div key={idx} className="board-wrapper"><Board target={t} solved={boardSolved[idx]} boardIndex={idx} /></div>))}
                                 </div>
                             </main>
 
-                            <footer className={`w-full p-3 pb-8 border-t shrink-0 ${isDark ? 'bg-gray-900/90 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+                            <footer className={`w-full p-3 pb-8 border-t shrink-0 z-20 ${isDark ? 'bg-gray-900/90 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
                                 <div className="max-w-xl mx-auto space-y-2">
                                     {[["q","w","e","r","t","y","u","i","o","p"],["a","s","d","f","g","h","j","k","l","ç"],["ENTER","z","x","c","v","b","n","m","⌫"]].map((row, i) => (
                                         <div key={i} className="flex justify-center gap-1.5">
