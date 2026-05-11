@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hype Term - Student</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); } 60% { transform: translateX(-8px); } 80% { transform: translateX(8px); } }
+        .animate-shake { animation: shake 0.4s ease-in-out; }
+        
+        @keyframes slide-up { 0% { transform: translateY(20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slide-up 0.3s ease-out forwards; }
+
+        @keyframes pulse-border {
+            0%, 100% { border-color: #22c55e; box-shadow: 0 0 0px rgba(34, 197, 94, 0); }
+            50% { border-color: #4ade80; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
+        }
+        .cursor-active { animation: pulse-border 1.5s infinite; border-width: 3px !important; border-style: solid; }
+
+        body { 
+            touch-action: manipulation; 
+            overflow: hidden; 
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            font-family: sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        .theme-dark { background: #030712; color: #ffffff; }
+        .theme-light { background: #f3f4f6; color: #111827; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .boards-layout {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            align-items: flex-start;
+            justify-content: center;
+            overflow-x: auto;
+            overflow-y: auto;
+            padding: 24px;
+            gap: 32px;
+        }
+
+        @media (max-width: 768px) {
+            .boards-layout {
+                justify-content: flex-start;
+                scroll-snap-type: x mandatory;
+                padding-top: 20px;
+                gap: 20px;
+            }
+            .board-wrapper {
+                flex: 0 0 88%;
+                scroll-snap-align: center;
+            }
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .theme-light .glass {
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-card {
+            background: rgba(128, 128, 128, 0.1);
+            border-radius: 12px;
+            padding: 12px 8px;
+            text-align: center;
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        // Base de dados expandida com foco em palavras comuns do Português Brasileiro
+        const WORDS_BY_LENGTH = {
+            4: ["amor", "casa", "dado", "fogo", "gato", "item", "jogo", "lago", "maos", "nulo", "povo", "roda", "sede", "tela", "vida", "bola", "azul", "mato", "reus", "fase", "hino", "leão", "meio", "novo", "olho", "pulo", "real", "suco", "trio", "vaga", "zero", "alvo", "boca", "cano", "doce", "eixo", "fiel", "guri", "hoje", "ilha", "joia", "lama", "musa", "neta", "ouro", "puro", "raso", "sumo", "teto", "urso", "voar"],
+            5: ["sagaz", "amago", "negro", "exito", "termo", "nobre", "algoz", "senso", "afeto", "etica", "plena", "mutua", "tenue", "fazer", "assim", "sutil", "vigor", "furia", "poder", "audaz", "ideia", "cerne", "moral", "inato", "sobre", "desde", "muito", "justo", "quiça", "torpe", "anexo", "futil", "razão", "icone", "etnia", "haver", "egide", "tange", "lapso", "casal", "expor", "haver", "dizer", "gleba", "ardil", "brado", "vicio", "serio", "temor", "saber", "obice", "pausa", "senão", "comum", "culto", "temer", "mundo", "censo", "denso", "pauta", "fugaz", "valer", "coisa", "viva", "pleno", "ordem", "gesto", "fatos", "limbo", "crise", "prole", "fluxo", "ajuda", "vazio", "pobre", "legal", "manha", "atras", "bravo", "casta"],
+            6: ["alegre", "beleza", "branco", "cidade", "escola", "frente", "grande", "homem", "irmão", "janela", "limpar", "mentir", "origem", "passar", "quarto", "senhor", "triste", "acesso", "agosto", "alheio", "antigo", "apenas", "aspeto", "atento", "avante", "bairro", "buscar", "caminho", "causar", "chegar", "classe", "codigo", "coluna", "compor", "comum", "contra", "corpo", "crença", "custar", "debate", "depois", "desejo", "diante", "direito", "divida", "duvida", "efeito", "eleito", "escola", "espaço", "estado", "estilo", "eterno", "exame", "existe", "falar", "falta", "figura", "focar", "ficar", "frase", "fruto", "futuro", "ganhar", "gestão", "grave", "grupal", "habito", "honra", "humano", "ideais", "imagem", "impor", "indice", "inicio", "juntos", "lançar", "leitura", "limite", "linhas", "lisboa", "longos", "lugar", "manter", "marcar", "maximo", "medida", "melhor", "membro", "mentira", "metodo", "minimo", "minuto", "missão", "modelo", "moderno", "motivo", "muitos", "musica", "nações", "nature", "niveis", "normal", "noticia", "nossos", "numero", "objeto", "olhar", "ontem", "ordens", "origem", "outros", "padrao", "pagina", "paineis", "palavra", "partir", "passos", "pedido", "perigo", "pessoa", "planos", "pobreza", "pontos", "porque", "portas", "poucos", "prazos", "preços", "predio", "pronto", "provas", "public", "quadro", "quarto", "queria", "quinta", "rapido", "razões", "regras", "riscos", "rotina", "sabado", "saude", "seculo", "seguir", "seguro", "semana", "sempre", "sendo", "sentir", "serie", "servir", "sessao", "setimo", "silvio", "simples", "social", "sonhos", "status", "sujeito", "tabela", "talvez", "tamanho", "tardes", "teatro", "tempos", "teoria", "termos", "textos", "titulo", "trazer", "treino", "unidos", "univer", "usando", "valores", "varios", "vencer", "vendas", "vermos", "viagem", "videos", "visitas", "vitoria", "viver"],
+            7: ["amizade", "balanço", "coragem", "destino", "energia", "famoso", "geração", "história", "inimigo", "jogador", "liberto", "mentira", "negócio", "orgulho", "pássaro", "querido", "respeito", "aberto", "acordar", "alguem", "analise", "anuncio", "arquivo", "atitude", "através", "aumento", "ausente", "baseado", "bondade", "caderno", "calculo", "capitulo", "carater", "celular", "certeza", "cliente", "colocar", "começar", "comprar", "confort", "consumo", "contato", "contudo", "criança", "cultura", "decisão", "defesa", "desafio", "detalhe", "diretor", "doença", "duvida", "educado", "eleição", "empresa", "encontr", "entrada", "errado", "esforço", "especie", "estamos", "estrada", "exemplo", "existem", "externo", "fazendo", "feriado", "ficando", "finalmente", "formado", "governo", "guardar", "horario", "impacto", "importa", "incrivel", "interno", "janeiro", "jornada", "laranja", "lembrar", "limpeza", "marcado", "mercado", "momento", "mudança", "negocio", "objetos", "oferece", "opinião", "parceria", "passado", "pensado", "perfeito", "periodo", "pessoal", "planejar", "poderia", "policia", "portões", "precisa", "preparo", "projeto", "proximo", "publico", "qualquer", "questão", "recurso", "relação", "revelar", "revisão", "salario", "seguida", "sentido", "serviço", "sistema", "sozinho", "sucesso", "tecnico", "terceir", "todavia", "trabalh", "unidade", "urgente", "usuario", "vontade"],
+            8: ["alegria", "bondade", "conhecer", "dinheiro", "estudo", "felicidade", "generoso", "horizonte", "intuição", "juventude", "liberdade", "memória", "natureza", "objetivo", "presente", "qualquer", "trabalho", "academia", "acredita", "ambiente", "amizades", "aprender", "atividades", "atualizar", "bastante", "benefico", "capaz", "complexo", "conversa", "corrente", "critério", "decisivo", "desconto", "desenvol", "disponiv", "distante", "economia", "elemento", "encontrar", "entender", "especial", "espírito", "estratég", "evolução", "exercito", "experien", "família", "fantástico", "historia", "imediato", "importan", "informar", "internet", "investir", "liberdad", "material", "medicina", "melhoria", "negociar", "obrigado", "original", "parabens", "percurso", "pesquisa", "positivo", "prefeito", "preparar", "processo", "produzir", "programa", "qualidad", "realizar", "resolver", "resposta", "seguranc", "situação", "sociedad", "telefone", "universo", "utilizar", "valoriza", "vermelho"]
+        };
+
+        const GAME_MODES = {
+            CLASSIC: { id: 'classic', label: 'Clássico', boards: 1, attempts: 6, len: 5 },
+            DUET: { id: 'duet', label: 'Dueto', boards: 2, attempts: 7, len: 5 },
+            QUARTET: { id: 'quartet', label: 'Quarteto', boards: 4, attempts: 9, len: 5 },
+            INFINITE: { id: 'infinite', label: 'Infinito', boards: 1, attempts: 9999, len: null }
+        };
+
+        const normalizeStr = (str) => str?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() || "";
+
+        const App = () => {
+            const [view, setView] = useState('home');
+            const [mode, setMode] = useState(GAME_MODES.CLASSIC);
+            const [isDark, setIsDark] = useState(true);
+            const [targets, setTargets] = useState([]);
+            const [guesses, setGuesses] = useState([]);
+            const [currentGuess, setCurrentGuess] = useState("");
+            const [cursorIndex, setCursorIndex] = useState(0);
+            const [gameState, setGameState] = useState("playing");
+            const [boardSolved, setBoardSolved] = useState([]);
+            const [shake, setShake] = useState(false);
+            const [showModal, setShowModal] = useState(false);
+            
+            const [stats, setStats] = useState(() => {
+                const saved = localStorage.getItem('termopro_stats_v3');
+                return saved ? JSON.parse(saved) : {
+                    played: 0, won: 0, streak: 0, maxStreak: 0,
+                    distribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                };
+            });
+
+            useEffect(() => {
+                document.body.className = isDark ? 'theme-dark' : 'theme-light';
+            }, [isDark]);
+
+            const saveStats = (won, attempts) => {
+                const newStats = { ...stats };
+                newStats.played += 1;
+                if (won) {
+                    newStats.won += 1;
+                    newStats.streak += 1;
+                    if (newStats.streak > newStats.maxStreak) newStats.maxStreak = newStats.streak;
+                    const distIndex = Math.min(attempts - 1, 9);
+                    newStats.distribution[distIndex] += 1;
+                } else {
+                    newStats.streak = 0;
+                }
+                setStats(newStats);
+                localStorage.setItem('termopro_stats_v3', JSON.stringify(newStats));
+            };
+
+            const initGame = (selectedMode) => {
+                let wordLen = selectedMode.len || 5;
+                if (selectedMode.id === 'infinite') wordLen = Math.floor(Math.random() * 5) + 4;
+                const pool = WORDS_BY_LENGTH[wordLen] || WORDS_BY_LENGTH[5];
+                const newTargets = [];
+                for(let i = 0; i < selectedMode.boards; i++) {
+                    let word;
+                    do { word = pool[Math.floor(Math.random() * pool.length)]; } while (newTargets.includes(word));
+                    newTargets.push(word);
+                }
+                setMode({ ...selectedMode, currentLen: wordLen });
+                setTargets(newTargets);
+                setGuesses([]);
+                setCurrentGuess("");
+                setCursorIndex(0);
+                setGameState("playing");
+                setBoardSolved(new Array(selectedMode.boards).fill(false));
+                setShowModal(false);
+                setView('game');
+            };
+
+            const quitToHome = () => {
+                setShowModal(false);
+                setGameState("playing");
+                setView('home');
+            };
+
+            const submitGuess = useCallback(() => {
+                if (gameState !== "playing") return;
+                const cleanGuess = currentGuess.padEnd(mode.currentLen, " ").slice(0, mode.currentLen);
+                
+                if (mode.id !== 'infinite' && cleanGuess.trim().length < mode.currentLen) { 
+                    setShake(true); setTimeout(() => setShake(false), 500); return; 
+                }
+                
+                const finalGuess = cleanGuess.trim();
+                const newGuesses = [...guesses, finalGuess];
+                setGuesses(newGuesses);
+                setCurrentGuess("");
+                setCursorIndex(0);
+                const newSolved = [...boardSolved];
+                targets.forEach((t, idx) => {
+                    if (normalizeStr(finalGuess) === normalizeStr(t)) newSolved[idx] = true;
+                });
+                setBoardSolved(newSolved);
+                
+                if (newSolved.every(s => s)) {
+                    setGameState("won");
+                    saveStats(true, newGuesses.length);
+                    setTimeout(() => setShowModal(true), 800);
+                } else if (mode.id !== 'infinite' && newGuesses.length >= mode.attempts) {
+                    setGameState("lost");
+                    saveStats(false, newGuesses.length);
+                    setTimeout(() => setShowModal(true), 800);
+                }
+            }, [currentGuess, guesses, targets, mode, boardSolved, gameState, stats]);
+
+            const onKeyPress = useCallback((key) => {
+                if (gameState !== "playing" || showModal) return;
+                const isInfinite = mode.id === 'infinite';
+                const maxLen = isInfinite ? 99 : mode.currentLen;
+
+                let guessArr = currentGuess.split("");
+                if (!isInfinite) {
+                    while (guessArr.length < maxLen) guessArr.push(" ");
+                }
+
+                if (key === "ENTER" || key === "Enter") {
+                    submitGuess();
+                } 
+                else if (key === "BACKSPACE" || key === "⌫" || key === "Backspace") {
+                    if (cursorIndex > 0 || (cursorIndex === 0 && guessArr[0] !== " ")) {
+                        const targetIdx = (guessArr[cursorIndex] === " " || cursorIndex === guessArr.length) ? Math.max(0, cursorIndex - 1) : cursorIndex;
+                        if (isInfinite) guessArr.splice(targetIdx, 1);
+                        else guessArr[targetIdx] = " ";
+                        setCurrentGuess(guessArr.join("").replace(/\s+$/, ""));
+                        setCursorIndex(targetIdx);
+                    }
+                } 
+                else if (key === "ArrowLeft") setCursorIndex(prev => Math.max(0, prev - 1));
+                else if (key === "ArrowRight") setCursorIndex(prev => Math.min(maxLen - 1, prev + 1));
+                else if (/^[a-zA-ZçÇ]$/.test(key)) {
+                    if (cursorIndex < maxLen) {
+                        guessArr[cursorIndex] = key.toLowerCase();
+                        setCurrentGuess(guessArr.join("").replace(/\s+$/, ""));
+                        setCursorIndex(prev => Math.min(maxLen - 1, prev + 1));
+                    }
+                }
+            }, [gameState, currentGuess, mode, submitGuess, showModal, cursorIndex]);
+
+            useEffect(() => {
+                const handle = (e) => {
+                    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) && view === 'game') e.preventDefault();
+                    onKeyPress(e.key);
+                }
+                window.addEventListener("keydown", handle);
+                return () => window.removeEventListener("keydown", handle);
+            }, [onKeyPress, view]);
+
+            const keyStatusMap = useMemo(() => {
+                const map = {};
+                guesses.forEach(guess => {
+                    const g = normalizeStr(guess);
+                    targets.forEach((t) => {
+                        const target = normalizeStr(t);
+                        for (let i = 0; i < g.length; i++) {
+                            const char = g[i];
+                            let status = "absent";
+                            if (target[i] === char) status = "correct";
+                            else if (target.includes(char)) status = "present";
+                            if (!map[char] || status === "correct" || (status === "present" && map[char] !== "correct")) {
+                                map[char] = status;
+                            }
+                        }
+                    });
+                });
+                return map;
+            }, [guesses, targets]);
+
+            const Tile = ({ letter, index, guess, target, isCurrent, isCursor, sizeClass }) => {
+                const normL = normalizeStr(letter);
+                const normT = normalizeStr(target);
+                
+                let status = "unused";
+                
+                if (guess) {
+                    const normalizedGuess = normalizeStr(guess);
+                    const normalizedTarget = normalizeStr(target);
+                    
+                    if (normalizedTarget[index] === normL) {
+                        status = "correct";
+                    } 
+                    else if (normalizedTarget.includes(normL)) {
+                        let occurrencesInTarget = 0;
+                        for (let char of normalizedTarget) if (char === normL) occurrencesInTarget++;
+                        
+                        let correctElsewhere = 0;
+                        for (let i = 0; i < normalizedTarget.length; i++) {
+                            if (normalizedTarget[i] === normL && normalizedGuess[i] === normL) correctElsewhere++;
+                        }
+                        
+                        let remainingToColorYellow = occurrencesInTarget - correctElsewhere;
+                        
+                        let yellowOccurrencesBefore = 0;
+                        for (let i = 0; i < index; i++) {
+                            if (normalizedGuess[i] === normL && normalizedTarget[i] !== normL) {
+                                yellowOccurrencesBefore++;
+                            }
+                        }
+
+                        if (remainingToColorYellow > yellowOccurrencesBefore) {
+                            status = "present";
+                        } else {
+                            status = "absent";
+                        }
+                    } else {
+                        status = "absent";
+                    }
+                } else if (isCurrent) {
+                    status = (letter && letter !== " ") ? "active" : "unused";
+                }
+                
+                const styles = {
+                    unused: isDark ? "border-gray-800 text-white" : "border-gray-300 text-gray-900",
+                    active: "border-green-500 bg-green-500/10",
+                    absent: isDark ? "bg-gray-800 border-transparent text-gray-500" : "bg-gray-300 border-transparent text-gray-500",
+                    present: "bg-yellow-500 border-transparent text-white",
+                    correct: "bg-green-600 border-transparent text-white"
+                };
+
+                return (
+                    <div 
+                        className={`
+                            ${sizeClass} flex items-center justify-center font-black uppercase transition-all duration-200 border-[2px] rounded-xl cursor-pointer
+                            ${styles[status]} 
+                            ${isCursor ? 'cursor-active' : ''}
+                        `}
+                        onClick={isCurrent ? () => setCursorIndex(index) : undefined}
+                    >
+                        {letter === " " ? "" : letter}
+                    </div>
+                );
+            };
+
+            const Board = ({ target, solved, boardIndex }) => {
+                const isInfinite = mode.id === 'infinite';
+                const rows = isInfinite ? [...guesses, ...(gameState === 'playing' ? [currentGuess] : [])] : Array.from({ length: mode.attempts });
+                const getTileSize = (len) => {
+                    if (mode.boards === 4) return len > 6 ? "w-7 h-9 text-sm" : "w-9 h-11 text-base md:w-11 md:h-13 md:text-xl";
+                    if (mode.boards === 2) return "w-10 h-12 text-xl md:w-12 md:h-14 md:text-2xl";
+                    return "w-12 h-14 text-2xl md:w-16 md:h-20 md:text-4xl";
+                };
+
+                return (
+                    <div className={`flex flex-col gap-2 items-center transition-all duration-500 ${solved ? 'opacity-20 grayscale scale-95' : 'scale-100'}`}>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-colors ${solved ? 'bg-green-500/20 text-green-500 border-green-500/20' : 'bg-gray-500/10 text-gray-500 border-transparent'}`}>
+                            PALAVRA #{boardIndex + 1} {solved && " ✓"}
+                        </span>
+                        <div className="space-y-1.5">
+                            {rows.map((rowText, i) => {
+                                const isCurrentRow = isInfinite ? (i === rows.length - 1 && gameState === 'playing') : (i === guesses.length && gameState === 'playing');
+                                const guess = i < guesses.length ? guesses[i] : null;
+                                const wordToDisplay = guess || (isCurrentRow ? currentGuess : "");
+                                const displayLen = isInfinite ? Math.max(wordToDisplay.length, 1) : mode.currentLen;
+                                const sizeClass = getTileSize(displayLen);
+                                const wasSolvedBefore = guesses.slice(0, i).some(g => normalizeStr(g) === normalizeStr(target));
+                                if (wasSolvedBefore && !isInfinite) return null;
+                                return (
+                                    <div key={i} className={`flex gap-1.5 justify-center ${isCurrentRow && shake ? 'animate-shake' : ''}`}>
+                                        {Array.from({ length: displayLen }).map((_, j) => (
+                                            <Tile key={j} index={j} letter={wordToDisplay[j] || " "} guess={guess} target={target} isCurrent={isCurrentRow} isCursor={isCurrentRow && cursorIndex === j} sizeClass={sizeClass} />
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="fixed inset-0 flex flex-col items-center overflow-hidden">
+                    {showModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" onClick={() => setShowModal(false)}>
+                            <div className={`${isDark ? 'bg-[#1a1c24] border-white/10' : 'bg-white border-gray-200'} w-full max-w-[380px] rounded-[40px] overflow-hidden shadow-2xl border animate-slide-up flex flex-col`} onClick={(e) => e.stopPropagation()}>
+                                <div className="p-8 text-center bg-gray-500/5">
+                                    <div className="flex justify-center mb-4">
+                                        <div className="w-20 h-20 rounded-3xl glass flex items-center justify-center text-4xl shadow-inner">
+                                            {gameState === 'playing' ? "📊" : (gameState === 'won' ? "🏆" : "💀")}
+                                        </div>
+                                    </div>
+                                    <h2 className={`text-3xl font-black uppercase tracking-tighter ${gameState === 'won' ? 'text-green-500' : (gameState === 'lost' ? 'text-red-500' : (isDark ? 'text-white' : 'text-gray-900'))}`}>
+                                        {gameState === 'won' ? "MUITO BEM!" : (gameState === 'lost' ? "DERROTA" : "ESTATÍSTICAS")}
+                                    </h2>
+                                    
+                                    {gameState !== "playing" && (
+                                        <div className="mt-6">
+                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">RESPOSTA(S)</p>
+                                            <p className={`text-xl font-black uppercase tracking-wider ${isDark ? 'text-white' : 'text-gray-900'}`}>{targets.join(" • ")}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="p-8 flex flex-col gap-6">
+                                    <div className="flex gap-2">
+                                        <div className="stat-card"><p className={`text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{stats.played}</p><p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Jogos</p></div>
+                                        <div className="stat-card"><p className={`text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{stats.played > 0 ? Math.round((stats.won/stats.played)*100) : 0}%</p><p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Vitórias</p></div>
+                                        <div className="stat-card"><p className={`text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{stats.streak}</p><p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Seq.</p></div>
+                                        <div className="stat-card"><p className={`text-2xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{stats.maxStreak}</p><p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Max.</p></div>
+                                    </div>
+
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">DISTRIBUIÇÃO</p>
+                                        <div className="space-y-2">
+                                            {stats.distribution.slice(0, mode.id === 'quartet' ? 9 : 6).map((count, i) => {
+                                                const maxDist = Math.max(...stats.distribution, 1);
+                                                const width = Math.max((count / maxDist) * 100, 8);
+                                                const isCurrentTry = gameState === 'won' && guesses.length === (i + 1);
+                                                return (
+                                                    <div key={i} className="flex items-center gap-3">
+                                                        <span className="text-[10px] font-bold text-gray-500 w-2">{i+1}</span>
+                                                        <div className={`flex-1 h-5 rounded-full overflow-hidden ${isDark ? 'bg-white/5' : 'bg-gray-200'}`}>
+                                                            <div className={`h-full flex items-center justify-end px-2 text-[10px] font-black transition-all duration-1000 ${isCurrentTry ? 'bg-green-500' : 'bg-gray-500'}`} style={{ width: `${width}%` }}>{count}</div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 mt-2">
+                                        {gameState !== "playing" && (
+                                            <button onClick={() => initGame(mode)} className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-black rounded-3xl shadow-lg transition-all active:scale-95 uppercase text-sm tracking-widest flex items-center justify-center gap-2">
+                                                Jogar Novamente
+                                            </button>
+                                        )}
+                                        <button onClick={() => setShowModal(false)} className={`w-full py-4 font-black rounded-3xl transition-all active:scale-95 uppercase text-sm tracking-widest border ${isDark ? 'bg-white/5 border-white/5 text-white' : 'bg-gray-100 border-gray-200 text-gray-900'}`}>
+                                            Fechar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {view === 'home' ? (
+                        <div className="flex-1 flex flex-col items-center justify-center p-8 w-full max-w-sm animate-slide-up">
+                            <div className="mb-12 text-center">
+                                <h1 className="text-6xl font-black italic tracking-tighter leading-none uppercase">Hype<span className="text-green-500">Term</span></h1>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.5em] mt-3">Open source game alternative</p>
+                            </div>
+                            <div className="grid gap-3 w-full">
+                                {Object.values(GAME_MODES).map(m => (
+                                    <button key={m.id} onClick={() => initGame(m)} className={`group flex items-center justify-between p-5 rounded-3xl transition-all active:scale-95 border ${isDark ? 'glass border-white/5 hover:bg-white/10' : 'bg-white border-gray-200 hover:bg-gray-50 shadow-sm'}`}>
+                                        <div className="text-left">
+                                            <span className={`block text-lg font-black uppercase group-hover:text-green-500 transition-colors ${isDark ? 'text-white' : 'text-gray-900'}`}>{m.label}</span>
+                                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{m.boards} {m.boards > 1 ? 'Palavras' : 'Palavra'} • {m.id === 'infinite' ? 'Ilimitado' : `${m.attempts} Tentativas`}</span>
+                                        </div>
+                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center group-hover:bg-green-500/20 group-hover:text-green-500 transition-all ${isDark ? 'bg-white/5 text-gray-500' : 'bg-gray-100 text-gray-400'}`}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <header className={`w-full flex items-center justify-between px-6 h-16 border-b shrink-0 z-10 backdrop-blur-md ${isDark ? 'bg-gray-950/80 border-white/5' : 'bg-white/80 border-gray-200'}`}>
+                                <button onClick={quitToHome} className="text-gray-500 hover:text-red-500 transition-colors"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></button>
+                                
+                                <div className="text-center">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none">{mode.label}</p>
+                                    <p className="text-sm font-black text-green-500 mt-1">{boardSolved.filter(s => s).length}/{mode.boards} RESOLVIDOS</p>
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setIsDark(!isDark)} className="text-gray-500 hover:text-yellow-500 transition-colors">
+                                        {isDark ? 
+                                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> : 
+                                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                                        }
+                                    </button>
+                                    <button onClick={() => setShowModal(true)} className="text-gray-500 hover:text-blue-500 transition-colors"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></button>
+                                </div>
+                            </header>
+                            
+                            <main className="flex-1 w-full relative overflow-hidden flex flex-col">
+                                <div className="boards-layout no-scrollbar">
+                                    {targets.map((t, idx) => (<div key={idx} className="board-wrapper"><Board target={t} solved={boardSolved[idx]} boardIndex={idx} /></div>))}
+                                </div>
+                            </main>
+
+                            <footer className={`w-full p-3 pb-8 border-t shrink-0 ${isDark ? 'bg-gray-900/90 border-white/5' : 'bg-gray-100 border-gray-200'}`}>
+                                <div className="max-w-xl mx-auto space-y-2">
+                                    {[["q","w","e","r","t","y","u","i","o","p"],["a","s","d","f","g","h","j","k","l","ç"],["ENTER","z","x","c","v","b","n","m","⌫"]].map((row, i) => (
+                                        <div key={i} className="flex justify-center gap-1.5">
+                                            {row.map(k => {
+                                                const status = keyStatusMap[normalizeStr(k)];
+                                                let style = isDark ? "bg-[#2a2d37] text-gray-200 border-[#3a3d47]" : "bg-white text-gray-900 border-gray-300";
+                                                if (status === "correct") style = "bg-green-600 text-white border-green-500";
+                                                else if (status === "present") style = "bg-yellow-500 text-white border-yellow-400";
+                                                else if (status === "absent") style = isDark ? "bg-[#14151a] text-gray-600 border-transparent opacity-50" : "bg-gray-200 text-gray-400 border-transparent opacity-50";
+                                                return (
+                                                    <button key={k} onClick={() => onKeyPress(k)} className={`h-12 md:h-16 rounded-xl font-black uppercase text-[10px] md:text-sm transition-all active:scale-90 border-b-[3px] shadow-sm ${k.length > 1 ? 'px-4 flex-grow' : 'w-full'} ${style}`}>{k === "ENTER" ? "OK" : k}</button>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </footer>
+                        </>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
